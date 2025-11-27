@@ -12,15 +12,11 @@ SELECT
 FROM transactions;  
 
 -- Get the last date in the dataset
-SELECT Date
-FROM transactions
-ORDER BY Date DESC
-LIMIT 1; -- 26-may-2015 is the last date of dataset
+SELECT  MAX(Date) 
+	FROM transactions;-- 26-may-2015 is the last date of dataset
 
-SELECT Date
-FROM credit_card_transactions
-ORDER BY Date ASC
-LIMIT 1;  --  04-oct-2013  is the first date of dataset
+SELECT MIN(Date)
+	FROM transactions;  --  04-oct-2013  is the first date of dataset
 			
 -- Count Total records
 select count(1) from transactions; -- total 26051 records
@@ -61,7 +57,7 @@ ORDER BY SpendingAmt_byExptype DESC;
 SELECT 
     City,
     SUM(Amount) AS Total_Spend,
-    ROUND(SUM(Amount) * 100 / (SELECT SUM(Amount) FROM transactions), 2) AS Percent_Contribution
+    SUM(Amount) * 100.0 / SUM(SUM(Amount)) OVER () AS Percent_Contribution
 FROM transactions
 GROUP BY City
 ORDER BY Total_Spend DESC
@@ -95,30 +91,27 @@ SELECT * FROM (
             AS A WHERE A.RN = 1 ;
             
 -- 4. write a query to find city which had lowest percentage spend for gold card type
-with city_card_amount as (
-    select *, sum(amount) over(partition by city, card_type) as new_amount 
-    from transactions
+WITH CityCardStats AS (
+    SELECT 
+        City, 
+        Card_Type, 
+        SUM(Amount) as total_card_spend
+    FROM transactions
+    GROUP BY City, Card_Type
 ),
-city_new_amount as (
-    select *, sum(amount) over(partition by city) as city_amount from city_card_amount
-), 
-unique_row as (
-    select distinct 
-        city, 
-        card_type, 
-        (new_amount * 1.0 / city_amount) * 100 as card_percentage 
-    from city_new_amount
-), 
-ranknum as (
-    select 
-        *, 
-        row_number() over(partition by city order by card_percentage) as rn 
-    from unique_row
-) 
-SELECT 
-    * FROM ranknum 
-WHERE 
-    rn = 1 AND card_type = 'Gold' 
+CityTotalStats AS (
+    SELECT 
+        City,
+        Card_Type,
+        total_card_spend,
+        SUM(total_card_spend) OVER(PARTITION BY City) as total_city_spend,
+        (total_card_spend * 100.0 / SUM(total_card_spend) OVER(PARTITION BY City)) as card_contribution
+    FROM CityCardStats
+)
+SELECT City, card_contribution 
+FROM CityTotalStats
+WHERE Card_Type = 'Gold'
+ORDER BY card_contribution ASC
 LIMIT 1;
 
 -- 5. write a query to print 3 columns: city, highest_expense_type , lowest_expense_type (example format : Delhi , bills, Fuel)

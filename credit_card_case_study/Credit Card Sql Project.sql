@@ -91,28 +91,16 @@ SELECT * FROM (
             AS A WHERE A.RN = 1 ;
             
 -- 4. write a query to find city which had lowest percentage spend for gold card type
-WITH CityCardStats AS (
-    SELECT 
-        City, 
-        Card_Type, 
-        SUM(Amount) as total_card_spend
-    FROM transactions
-    GROUP BY City, Card_Type
-),
-CityTotalStats AS (
-    SELECT 
-        City,
-        Card_Type,
-        total_card_spend,
-        SUM(total_card_spend) OVER(PARTITION BY City) as total_city_spend,
-        (total_card_spend * 100.0 / SUM(total_card_spend) OVER(PARTITION BY City)) as card_contribution
-    FROM CityCardStats
-)
-SELECT City, card_contribution 
-FROM CityTotalStats
-WHERE Card_Type = 'Gold'
-ORDER BY card_contribution ASC
-LIMIT 1;
+WITH cumlative_card_spend AS (
+    SELECT *, 
+        SUM(AMOUNT) OVER(PARTITION BY card_type ORDER BY `DATE`, ID) AS total_spend
+    FROM transactions )
+SELECT * FROM (
+    SELECT *,
+        ROW_NUMBER() OVER(PARTITION BY CARD_TYPE ORDER BY `DATE`, ID) AS rn 
+    FROM cumlative_card_spend
+    WHERE total_spend >= 1000000) AS A
+WHERE A.rn = 1;
 
 -- 5. write a query to print 3 columns: city, highest_expense_type , lowest_expense_type (example format : Delhi , bills, Fuel)
 WITH ranked AS (
